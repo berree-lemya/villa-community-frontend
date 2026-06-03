@@ -1,5 +1,5 @@
 // api.js — Central API helper for Vineyards frontend
-const BASE_URL = 'https://villa-community-backend.onrender.com';
+const BASE_URL = 'https://villa-community-backend.onrender.com/api';
 
 const api = {
   _getToken() {
