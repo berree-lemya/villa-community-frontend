@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Register</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root { --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;--border:rgba(255,255,255,0.07);--accent:#c9a84c;--accent2:#e8c97a;--text:#e8e8f0;--text2:#9090a8;--danger:#e05555; }
+    * { margin:0;padding:0;box-sizing:border-box; }
+    body { font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 20px; }
+    .box { background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:480px; }
+    .brand { font-family:'Cormorant Garamond',serif;font-size:28px;color:var(--accent);text-align:center;margin-bottom:4px; }
+    .sub { text-align:center;color:var(--text2);font-size:13px;margin-bottom:32px; }
+    .form-group { margin-bottom:16px; }
+    label { display:block;font-size:11px;color:var(--text2);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px; }
+    .form-control { width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s; }
+    .form-control:focus { border-color:var(--accent); }
+    .btn { width:100%;padding:13px;background:var(--accent);color:var(--bg);border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;margin-top:8px;transition:all 0.2s;font-family:'DM Sans',sans-serif; }
+    .btn:hover { background:var(--accent2); }
+    .error { background:rgba(224,85,85,0.1);border:1px solid rgba(224,85,85,0.3);border-radius:8px;padding:12px;font-size:13px;color:var(--danger);margin-bottom:16px;display:none; }
+    .login-link { text-align:center;margin-top:20px;font-size:13px;color:var(--text2); }
+    .login-link a { color:var(--accent);cursor:pointer; }
+    .row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .hint { font-size:11px;color:var(--text2);margin-top:5px; }
+    .villa-status { font-size:12px;margin-top:6px;min-height:18px;transition:color 0.2s; }
+    .villa-status.ok  { color:#4caf82; }
+    .villa-status.err { color:var(--danger); }
+    .villa-status.checking { color:var(--text2); }
+  </style>
+</head>
+<body>
+<div class="box">
+  <div class="brand">Vineyards</div>
+  <div class="sub">Create your resident account</div>
+
+  <div class="error" id="errMsg"></div>
+
+  <div class="row">
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" class="form-control" id="name" placeholder="Your name"/>
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="text" class="form-control" id="phone" placeholder="Mobile number"/>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Email</label>
+    <input type="email" class="form-control" id="email" placeholder="you@example.com"/>
+  </div>
+
+  <div class="form-group">
+    <label>Password</label>
+    <input type="password" class="form-control" id="password" placeholder="Minimum 8 characters"/>
+  </div>
+
+  <div class="form-group">
+    <label>I am a</label>
+    <select class="form-control" id="role">
+      <option value="tenant">Tenant</option>
+      <option value="owner">Owner</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Villa Number</label>
+    <input type="text" class="form-control" id="villaNumber" placeholder="e.g. A-101" oninput="checkVilla()"/>
+    <div class="villa-status" id="villaStatus"></div>
+    <div class="hint">Enter your villa number. Leave blank if unknown — an admin can assign it later.</div>
+  </div>
+
+  <button class="btn" id="regBtn" onclick="register()">Create Account</button>
+
+  <div class="login-link">Already have an account? <a onclick="window.location.href='index.html'">Sign in</a></div>
+</div>
+
+<script>
+  const BASE = 'http://localhost:5000/api';
+  let villaCheckTimer = null;
+  let villaValid = null; // null = unchecked, true = ok, false = taken/invalid
+
+  function checkVilla() {
+    const val = document.getElementById('villaNumber').value.trim();
+    const statusEl = document.getElementById('villaStatus');
+    clearTimeout(villaCheckTimer);
+    villaValid = null;
+
+    if (!val) { statusEl.textContent = ''; statusEl.className = 'villa-status'; return; }
+
+    statusEl.textContent = 'Checking…';
+    statusEl.className = 'villa-status checking';
+
+    villaCheckTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${BASE}/villas/check?number=${encodeURIComponent(val)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Not found');
+        if (data.occupied) {
+          villaValid = false;
+          statusEl.textContent = '✗ This villa already has a resident assigned.';
+          statusEl.className = 'villa-status err';
+        } else {
+          villaValid = true;
+          statusEl.textContent = `✓ Villa ${data.villa_number} is available.`;
+          statusEl.className = 'villa-status ok';
+        }
+      } catch(e) {
+        villaValid = false;
+        statusEl.textContent = '✗ Villa not found. Check the number or leave blank.';
+        statusEl.className = 'villa-status err';
+      }
+    }, 500);
+  }
+
+  async function register() {
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const password = document.getElementById('password').value;
+    const role = document.getElementById('role').value;
+    const villaNumber = document.getElementById('villaNumber').value.trim();
+    const btn = document.getElementById('regBtn');
+    const err = document.getElementById('errMsg');
+    err.style.display = 'none';
+
+    if (!name || !email || !password) { showErr('Please fill all required fields.'); return; }
+    if (password.length < 8) { showErr('Password must be at least 8 characters.'); return; }
+    if (villaNumber && villaValid === false) { showErr('Please enter a valid, unoccupied villa number.'); return; }
+    if (villaNumber && villaValid === null) { showErr('Please wait — still checking villa availability.'); return; }
+
+    btn.disabled = true; btn.textContent = 'Creating account…';
+    try {
+      const res = await fetch(`${BASE}/auth/register`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name, email, phone, password, role, villa_number: villaNumber || undefined })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
+      window.location.href = 'index.html';
+    } catch(e) {
+      showErr(e.message);
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('errMsg');
+    el.textContent = msg; el.style.display = 'block';
+  }
+</script>
+</body>
+</html>

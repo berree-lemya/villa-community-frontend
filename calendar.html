@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Events Calendar 2026</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    /* ── Calendar page ── */
+    .cal-year-badge {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 72px;
+      font-weight: 600;
+      color: var(--accent);
+      line-height: 1;
+      letter-spacing: -2px;
+      opacity: 0.15;
+      position: absolute;
+      top: 18px;
+      right: 40px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .events-strip {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .event-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 40px;
+      padding: 8px 16px 8px 8px;
+      font-size: 13px;
+      transition: border-color 0.2s, transform 0.2s;
+      cursor: default;
+    }
+    .event-chip:hover {
+      border-color: rgba(201,168,76,0.4);
+      transform: translateY(-1px);
+    }
+    .event-chip .chip-icon {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(201,168,76,0.12);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .event-chip .chip-info .chip-name { font-weight: 500; color: var(--text); }
+    .event-chip .chip-info .chip-date { font-size: 11px; color: var(--accent); margin-top: 1px; }
+
+    /* ── Year grid ── */
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 1100px) { .cal-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 800px)  { .cal-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px)  { .cal-grid { grid-template-columns: 1fr; } }
+
+    .month-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .month-card:hover { border-color: rgba(201,168,76,0.3); }
+    .month-card.has-event { border-color: rgba(201,168,76,0.25); }
+
+    .month-header {
+      background: #1e1e2a;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .month-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .month-event-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .month-body { padding: 10px 12px 12px; }
+
+    .day-labels {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 4px;
+    }
+    .day-label {
+      text-align: center;
+      font-size: 9px;
+      font-weight: 500;
+      color: var(--text2);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 2px 0;
+    }
+
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+    }
+
+    .day-cell {
+      text-align: center;
+      font-size: 11px;
+      padding: 4px 2px;
+      border-radius: 6px;
+      color: var(--text2);
+      position: relative;
+      cursor: default;
+      transition: background 0.15s;
+    }
+    .day-cell.today {
+      background: rgba(201,168,76,0.18);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .day-cell.event-day {
+      background: rgba(201,168,76,0.1);
+      color: var(--accent2);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .day-cell.event-day::after {
+      content: '';
+      display: block;
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin: 1px auto 0;
+    }
+    .day-cell.event-day:hover { background: rgba(201,168,76,0.22); }
+    .day-cell.empty { color: transparent; pointer-events: none; }
+
+    /* ── Event banner below month ── */
+    .month-event-banner {
+      border-top: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      background: rgba(201,168,76,0.05);
+    }
+    .month-event-banner .ev-icon { font-size: 15px; }
+    .month-event-banner .ev-text { color: var(--text2); }
+    .month-event-banner .ev-text strong { color: var(--text); }
+
+    /* ── Event tooltip on hover ── */
+    .day-cell.event-day:hover .tooltip { display: block; }
+    .tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2a2a38;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #2a2a38;
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <!-- Main -->
+  <main class="main-content">
+    <div class="page-header" style="position:relative; overflow:hidden;">
+      <h1>Events Calendar</h1>
+      <p>Hunters Walk community events &amp; celebrations — 2026</p>
+      <div class="cal-year-badge">2026</div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Upcoming events strip -->
+      <h2 style="font-size:18px; margin-bottom:14px; color:var(--text2); font-family:'DM Sans',sans-serif; font-weight:400; text-transform:uppercase; letter-spacing:0.1em; font-size:11px;">Scheduled Events This Year</h2>
+      <div class="events-strip">
+        <div class="event-chip">
+          <div class="chip-icon">🥚</div>
+          <div class="chip-info">
+            <div class="chip-name">Easter Egg Hunt</div>
+            <div class="chip-date">Mar 29 · 3:00 PM</div>
+          </div>
+        </div>
+        <div class="event-chip">
+          <div class="chip-icon">🎓</div>
+          <div class="chip-info">
+            <div class="chip-name">Class of '26 Congrats</div>
+            <div class="chip-date">May · Graduates</div>
+          </div>
+        </div>
+        <div class="event-chip">
+          <div class="chip-icon">🦆</div>
+          <div class="chip-info">
+            <div class="chip-name">Pool Party</div>
+            <div class="chip-date">Jun 6 · 1:00–4:00 PM</div>
+          </div>
+        </div>
+        <div class="event-chip">
+          <div class="chip-icon">🇺🇸</div>
+          <div class="chip-info">
+            <div class="chip-name">July 4th Parade</div>
+            <div class="chip-date">Jul 4 · 5:00 PM</div>
+          </div>
+        </div>
+        <div class="event-chip">
+          <div class="chip-icon">🎃</div>
+          <div class="chip-info">
+            <div class="chip-name">Fall Festival</div>
+            <div class="chip-date">Oct 4 · 2:00–4:00 PM</div>
+          </div>
+        </div>
+        <div class="event-chip">
+          <div class="chip-icon">📸</div>
+          <div class="chip-info">
+            <div class="chip-name">Santa Photos</div>
+            <div class="chip-date">Nov 8 · 1:00–3:00 PM</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 12-month grid -->
+      <div class="cal-grid" id="calGrid"></div>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast-container"></div>
+
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+requireAuth();
+
+// ── Event data (from calendar image) ──
+const EVENTS_2026 = {
+  3:  [{ day: 29, label: 'Easter Egg Hunt', time: '3:00 PM', icon: '🥚' }],
+  5:  [],   // Congrats Class of '26 — month highlight, no specific day
+  6:  [{ day: 6,  label: 'Pool Party', time: '1:00–4:00 PM', icon: '🦆' }],
+  7:  [{ day: 4,  label: 'July 4th Parade', time: '5:00 PM', icon: '🇺🇸' }],
+  10: [{ day: 4,  label: 'Fall Festival', time: '2:00–4:00 PM', icon: '🎃' }],
+  11: [{ day: 8,  label: 'Santa Photos', time: '1:00–3:00 PM', icon: '📸' }],
+};
+
+const MONTH_NOTES = {
+  5: { icon: '🎓', text: '<strong>Congrats Class of \'26!</strong> If you have a Senior graduating this year, please let us know!' }
+};
+
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+const DAY_LABELS  = ['S','M','T','W','T','F','S'];
+
+const today = new Date();
+
+function buildMonth(monthIndex /* 0-based */) {
+  const m1  = new Date(2026, monthIndex, 1);
+  const startDow = m1.getDay();                  // 0=Sun
+  const daysInMonth = new Date(2026, monthIndex + 1, 0).getDate();
+  const events = EVENTS_2026[monthIndex + 1] || [];
+  const eventDays = new Set(events.map(e => e.day));
+  const hasEvent = events.length > 0 || MONTH_NOTES[monthIndex + 1];
+
+  // day-label row
+  const labelsHTML = DAY_LABELS.map(d => `<div class="day-label">${d}</div>`).join('');
+
+  // blank cells before day 1
+  let cells = '';
+  for (let i = 0; i < startDow; i++) cells += `<div class="day-cell empty">·</div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isToday = (today.getFullYear() === 2026 &&
+                     today.getMonth() === monthIndex &&
+                     today.getDate() === d);
+    const ev = events.find(e => e.day === d);
+    let cls = 'day-cell';
+    if (isToday)  cls += ' today';
+    if (ev)       cls += ' event-day';
+    const tooltip = ev ? `<span class="tooltip">${ev.icon} ${ev.label} · ${ev.time}</span>` : '';
+    cells += `<div class="${cls}">${d}${tooltip}</div>`;
+  }
+
+  // event banner
+  let bannerHTML = '';
+  if (events.length > 0) {
+    bannerHTML = events.map(ev =>
+      `<div class="month-event-banner">
+        <span class="ev-icon">${ev.icon}</span>
+        <span class="ev-text"><strong>${ev.label}</strong> — ${ev.time}</span>
+       </div>`
+    ).join('');
+  }
+  if (MONTH_NOTES[monthIndex + 1]) {
+    const n = MONTH_NOTES[monthIndex + 1];
+    bannerHTML += `<div class="month-event-banner">
+      <span class="ev-icon">${n.icon}</span>
+      <span class="ev-text">${n.text}</span>
+    </div>`;
+  }
+
+  return `
+    <div class="month-card ${hasEvent ? 'has-event' : ''}">
+      <div class="month-header">
+        <span class="month-name">${MONTH_NAMES[monthIndex]}</span>
+        ${hasEvent ? '<div class="month-event-dot"></div>' : ''}
+      </div>
+      <div class="month-body">
+        <div class="day-labels">${labelsHTML}</div>
+        <div class="days-grid">${cells}</div>
+      </div>
+      ${bannerHTML}
+    </div>`;
+}
+
+// Render all 12 months
+const grid = document.getElementById('calGrid');
+for (let m = 0; m < 12; m++) {
+  grid.insertAdjacentHTML('beforeend', buildMonth(m));
+}
+</script>
+</body>
+</html>

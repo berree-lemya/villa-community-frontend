@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Gate Access</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;">
+      <div>
+        <h1>Gate Access</h1>
+        <p>Manage visitor and maid entry passes</p>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div id="securityVerifyBtn" style="display:none">
+          <button class="btn btn-outline" onclick="openVerify()">🔍 Verify Pass</button>
+        </div>
+        <button class="btn btn-primary" id="newPassBtn" onclick="openModal()">+ New Pass</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- Filter tabs -->
+      <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;">
+        <button class="btn btn-outline filter-btn active" onclick="filterPasses('', this)">All</button>
+        <button class="btn btn-outline filter-btn" onclick="filterPasses('visitor', this)">🧑 Visitors</button>
+        <button class="btn btn-outline filter-btn" onclick="filterPasses('maid', this)">🧹 Maids</button>
+        <button class="btn btn-outline filter-btn" onclick="filterPasses('delivery', this)">📦 Delivery</button>
+      </div>
+
+      <div class="table-wrap" id="passList">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- New Pass Modal -->
+<div class="modal-overlay" id="passModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Create Gate Pass</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Pass Type</label>
+      <select class="form-control" id="passType" onchange="toggleRecurring()">
+        <option value="visitor">🧑 Visitor</option>
+        <option value="maid">🧹 Maid</option>
+        <option value="delivery">📦 Delivery</option>
+        <option value="contractor">🔨 Contractor</option>
+      </select>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="form-group">
+        <label>Visitor Name</label>
+        <input type="text" class="form-control" id="visitorName" placeholder="Full name"/>
+      </div>
+      <div class="form-group">
+        <label>Phone (optional)</label>
+        <input type="text" class="form-control" id="visitorPhone" placeholder="Phone number"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Vehicle Number (optional)</label>
+      <input type="text" class="form-control" id="visitorVehicle" placeholder="e.g. TN01AB1234"/>
+    </div>
+
+    <div class="form-group">
+      <label>Purpose</label>
+      <input type="text" class="form-control" id="purpose" placeholder="e.g. Birthday party, House cleaning"/>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="form-group">
+        <label>Valid From</label>
+        <input type="datetime-local" class="form-control" id="validFrom"/>
+      </div>
+      <div class="form-group">
+        <label>Valid Until</label>
+        <input type="datetime-local" class="form-control" id="validUntil"/>
+      </div>
+    </div>
+
+    <!-- Recurring section (for maids) -->
+    <div id="recurringSection" style="display:none;">
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="isRecurring" onchange="toggleDays()"/> Recurring (regular entry)
+        </label>
+      </div>
+      <div id="daysSection" style="display:none;">
+        <label style="font-size:11px;color:var(--text2);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;display:block;">Entry Days</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Mon"/> Mon</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Tue"/> Tue</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Wed"/> Wed</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Thu"/> Thu</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Fri"/> Fri</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Sat"/> Sat</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;"><input type="checkbox" class="day-cb" value="Sun"/> Sun</label>
+          </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="submitPass()">Create Gate Pass</button>
+  </div>
+</div>
+
+<!-- Verify Pass Modal (security) -->
+<div class="modal-overlay" id="verifyModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h2>Verify Gate Pass</h2>
+      <button class="modal-close" onclick="closeVerify()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Enter Pass Code</label>
+      <input type="text" class="form-control" id="verifyCode" placeholder="e.g. GP-A1B2C3" style="font-size:18px;letter-spacing:0.1em;text-transform:uppercase;"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="verifyPass()">Verify</button>
+    <div id="verifyResult" style="margin-top:20px;"></div>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+  requireAuth();
+  const user = getCurrentUser();
+  let allPasses = [];
+  let currentFilter = '';
+
+  async function loadPasses() {
+    try {
+      let url = '/gate/my';
+      if (user.role === 'admin') url = '/gate/all';
+      else if (user.role === 'security') url = '/gate/active';
+      allPasses = await api.get(url);
+      renderPasses(allPasses);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function renderPasses(list) {
+    const el = document.getElementById('passList');
+    const filtered = currentFilter ? list.filter(p => p.pass_type === currentFilter) : list;
+    if (!filtered.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">🚪</div><h3>No gate passes</h3><p>Create a pass for your visitor or maid</p></div>`;
+      return;
+    }
+    const typeIcons = { visitor:'🧑', maid:'🧹', delivery:'📦', contractor:'🔨' };
+    el.innerHTML = `<table>
+      <thead><tr><th>Pass Code</th><th>Type</th><th>Visitor</th><th>Villa</th><th>Valid Until</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${filtered.map(p => `
+        <tr>
+          <td><code style="color:var(--accent);font-size:13px;">${p.pass_code}</code></td>
+          <td>${typeIcons[p.pass_type] || ''} ${p.pass_type}</td>
+          <td><strong>${p.visitor_name}</strong>${p.visitor_phone ? `<br><span style="color:var(--text2);font-size:12px;">${p.visitor_phone}</span>` : ''}</td>
+          <td>${p.villa_number || '—'}</td>
+          <td>${fmtDate(p.valid_until)}</td>
+          <td>${badge(p.status)}</td>
+          <td>
+            ${p.status === 'active' && (user.role === 'owner' || user.role === 'tenant' || user.role === 'admin') ?
+              `<button class="btn btn-danger btn-sm" onclick="revokePass(${p.id})">Revoke</button>` : ''}
+            ${p.status === 'active' && user.role === 'security' && !p.checked_in_at ?
+              `<button class="btn btn-primary btn-sm" onclick="checkIn(${p.id})">Check In</button>` : ''}
+            ${p.checked_in_at && !p.checked_out_at && user.role === 'security' ?
+              `<button class="btn btn-outline btn-sm" onclick="checkOut(${p.id})">Check Out</button>` : ''}
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function filterPasses(type, btn) {
+    currentFilter = type;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPasses(allPasses);
+  }
+
+  function openModal() { document.getElementById('passModal').classList.add('open'); }
+  function closeModal() { document.getElementById('passModal').classList.remove('open'); }
+
+  function toggleRecurring() {
+    const type = document.getElementById('passType').value;
+    document.getElementById('recurringSection').style.display = type === 'maid' ? 'block' : 'none';
+  }
+
+  function toggleDays() {
+    const checked = document.getElementById('isRecurring').checked;
+    document.getElementById('daysSection').style.display = checked ? 'block' : 'none';
+  }
+
+  async function submitPass() {
+    const name = document.getElementById('visitorName').value.trim();
+    const from = document.getElementById('validFrom').value;
+    const until = document.getElementById('validUntil').value;
+
+    if (!name || !from || !until) { showToast('Please fill required fields', 'error'); return; }
+
+    const days = [...document.querySelectorAll('.day-cb:checked')].map(c => c.value).join(',');
+
+    const body = {
+      pass_type: document.getElementById('passType').value,
+      visitor_name: name,
+      visitor_phone: document.getElementById('visitorPhone').value || undefined,
+      visitor_vehicle: document.getElementById('visitorVehicle').value || undefined,
+      purpose: document.getElementById('purpose').value || undefined,
+      valid_from: from.replace('T',' ') + ':00',
+      valid_until: until.replace('T',' ') + ':00',
+      is_recurring: document.getElementById('isRecurring')?.checked || false,
+      recurring_days: days || undefined,
+    };
+
+    try {
+      const data = await api.post('/gate/', body);
+      showToast(`Pass created! Code: ${data.gate_pass.pass_code}`, 'success');
+      closeModal();
+      loadPasses();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function revokePass(id) {
+    if (!confirm('Revoke this gate pass?')) return;
+    try {
+      await api.put(`/gate/${id}/revoke`);
+      showToast('Pass revoked', 'info');
+      loadPasses();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function checkIn(id) {
+    try {
+      await api.put(`/gate/${id}/checkin`);
+      showToast('Visitor checked in', 'success');
+      loadPasses();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function checkOut(id) {
+    try {
+      await api.put(`/gate/${id}/checkout`);
+      showToast('Visitor checked out', 'info');
+      loadPasses();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function openVerify() { document.getElementById('verifyModal').classList.add('open'); }
+  function closeVerify() { document.getElementById('verifyModal').classList.remove('open'); }
+
+  async function verifyPass() {
+    const code = document.getElementById('verifyCode').value.trim().toUpperCase();
+    if (!code) return;
+    const el = document.getElementById('verifyResult');
+    try {
+      const data = await api.get(`/gate/verify/${code}`);
+      const p = data.gate_pass;
+      el.innerHTML = `<div style="background:rgba(76,175,130,0.1);border:1px solid var(--success);border-radius:10px;padding:16px;">
+        <div style="color:var(--success);font-weight:600;margin-bottom:8px;">✅ Valid Pass</div>
+        <div style="font-size:14px;"><strong>${p.visitor_name}</strong> → Villa ${p.villa_number}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px;">Type: ${p.pass_type} · Valid until ${fmtDate(p.valid_until)}</div>
+      </div>`;
+    } catch(e) {
+      el.innerHTML = `<div style="background:rgba(224,85,85,0.1);border:1px solid var(--danger);border-radius:10px;padding:16px;color:var(--danger);">❌ ${e.message}</div>`;
+    }
+  }
+
+  // Show security verify button
+  if (user.role === 'security' || user.role === 'admin') {
+    document.getElementById('securityVerifyBtn').style.display = 'block';
+  }
+  // Hide new pass for security
+  if (user.role === 'security') {
+    document.getElementById('newPassBtn').style.display = 'none';
+  }
+
+  loadPasses();
+</script>
+</body>
+</html>

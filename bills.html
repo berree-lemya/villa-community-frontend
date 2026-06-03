@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Bills & Payments</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;">
+      <div>
+        <h1>Bills & Payments</h1>
+        <p>Track and pay your community charges</p>
+      </div>
+      <div id="adminActions" style="gap:10px;display:none;">
+        <button class="btn btn-outline" onclick="openBulkModal()">📋 Bulk Bill</button>
+        <button class="btn btn-primary" onclick="openCreateModal()">+ New Bill</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Summary Cards -->
+      <div class="stat-grid" style="margin-bottom:28px;" id="summaryCards">
+        <div class="stat-card"><div class="label">Total Due</div><div class="value" id="sumDue">—</div><div class="sub">unpaid amount</div></div>
+        <div class="stat-card" style="--accent:#e05555"><div class="label">Overdue</div><div class="value" style="color:var(--danger)" id="sumOverdue">—</div><div class="sub" id="sumOverdueCount">— bills overdue</div></div>
+        <div class="stat-card" style="--accent:#4caf82"><div class="label">Total Paid</div><div class="value" style="color:var(--success)" id="sumPaid">—</div><div class="sub">this year</div></div>
+        <div class="stat-card"><div class="label">Pending Bills</div><div class="value" id="sumCount">—</div><div class="sub">awaiting payment</div></div>
+      </div>
+
+      <!-- Filter -->
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+        <button class="btn btn-outline filter-btn active" onclick="filterBills('', this)">All</button>
+        <button class="btn btn-outline filter-btn" onclick="filterBills('unpaid', this)">Unpaid</button>
+        <button class="btn btn-outline filter-btn" onclick="filterBills('overdue', this)">Overdue</button>
+        <button class="btn btn-outline filter-btn" onclick="filterBills('paid', this)">Paid</button>
+      </div>
+
+      <div class="table-wrap" id="billList">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Pay Modal -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h2>Pay Bill</h2>
+      <button class="modal-close" onclick="closePayModal()">✕</button>
+    </div>
+    <div style="background:var(--bg3);border-radius:10px;padding:16px;margin-bottom:20px;">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:4px;" id="payBillTitle">—</div>
+      <div style="font-size:28px;font-family:'Cormorant Garamond',serif;color:var(--accent);" id="payBillAmount">—</div>
+    </div>
+    <div class="form-group">
+      <label>Payment Method</label>
+      <select class="form-control" id="payMethod">
+        <option value="upi">UPI</option>
+        <option value="netbanking">Net Banking</option>
+        <option value="card">Credit / Debit Card</option>
+        <option value="cash">Cash</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Transaction Reference (optional)</label>
+      <input type="text" class="form-control" id="payRef" placeholder="e.g. UPI transaction ID"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="confirmPayment()">Confirm Payment</button>
+  </div>
+</div>
+
+<!-- Admin: Create Bill Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="createModalTitle">Create Bill</h2>
+      <button class="modal-close" onclick="closeCreateModal()">✕</button>
+    </div>
+    <div class="form-group" id="villaSelectGroup">
+      <label>Villa</label>
+      <select class="form-control" id="billVilla"><option value="">Select villa...</option></select>
+    </div>
+    <div class="form-group">
+      <label>Bill Title</label>
+      <input type="text" class="form-control" id="billTitle" placeholder="e.g. Monthly Maintenance Charge"/>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="form-group">
+        <label>Category</label>
+        <select class="form-control" id="billCategory">
+          <option value="maintenance">Maintenance</option>
+          <option value="amenity">Amenity</option>
+          <option value="parking">Parking</option>
+          <option value="water">Water</option>
+          <option value="electricity">Electricity</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Amount (₹)</label>
+        <input type="number" class="form-control" id="billAmount" placeholder="0.00"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Due Date</label>
+      <input type="date" class="form-control" id="billDue"/>
+    </div>
+    <div class="form-group">
+      <label>Description (optional)</label>
+      <input type="text" class="form-control" id="billDesc"/>
+    </div>
+    <button class="btn btn-primary" style="width:100%" id="createBillBtn" onclick="submitBill()">Create Bill</button>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+  requireAuth();
+  const user = getCurrentUser();
+  let allBills = [];
+  let payingBillId = null;
+  let isBulk = false;
+
+  async function init() {
+    await loadSummary();
+    await loadBills();
+    if (user.role === 'admin') {
+      document.getElementById('adminActions').style.display = 'flex';
+      loadVillas();
+    }
+  }
+
+  async function loadSummary() {
+    try {
+      const s = await api.get('/bills/summary');
+      document.getElementById('sumDue').textContent = `₹${s.total_due.toLocaleString()}`;
+      document.getElementById('sumOverdue').textContent = `₹${s.overdue.toLocaleString()}`;
+      document.getElementById('sumOverdueCount').textContent = `${s.overdue_count} bills overdue`;
+      document.getElementById('sumPaid').textContent = `₹${s.paid_total.toLocaleString()}`;
+      document.getElementById('sumCount').textContent = s.unpaid_count;
+    } catch(e) {}
+  }
+
+  async function loadBills(status = '') {
+    try {
+      const url = user.role === 'admin' ? `/bills/all${status ? '?status=' + status : ''}` : `/bills/my${status ? '?status=' + status : ''}`;
+      allBills = await api.get(url);
+      renderBills(allBills);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function renderBills(bills) {
+    const el = document.getElementById('billList');
+    if (!bills.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">💰</div><h3>No bills found</h3></div>`;
+      return;
+    }
+    const catIcons = { maintenance:'🔧', amenity:'🎾', parking:'🚗', water:'💧', electricity:'⚡', other:'📄' };
+    el.innerHTML = `<table>
+      <thead><tr><th>Category</th><th>Title</th>${user.role==='admin'?'<th>Villa</th>':''}
+      <th>Amount</th><th>Due Date</th><th>Status</th><th>Paid On</th><th>Action</th></tr></thead>
+      <tbody>${bills.map(b => `<tr>
+        <td>${catIcons[b.category]||'📄'} ${b.category}</td>
+        <td><strong>${b.title}</strong>${b.description?`<br><span style="color:var(--text2);font-size:12px;">${b.description}</span>`:''}</td>
+        ${user.role==='admin'?`<td>${b.villa_number||'—'}</td>`:''}
+        <td style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--accent);">₹${b.amount.toLocaleString()}</td>
+        <td>${fmtDate(b.due_date)}</td>
+        <td>${badge(b.status)}</td>
+        <td>${b.paid_at ? fmtDate(b.paid_at) : '—'}</td>
+        <td>
+          ${b.status !== 'paid' && b.status !== 'waived' && user.role !== 'admin' ?
+            `<button class="btn btn-primary btn-sm" onclick="openPay(${b.id},'${b.title}',${b.amount})">Pay Now</button>` : ''}
+          ${user.role === 'admin' && b.status !== 'paid' && b.status !== 'waived' ?
+            `<button class="btn btn-outline btn-sm" onclick="waiveBill(${b.id})">Waive</button>` : ''}
+          ${b.transaction_ref ? `<div style="font-size:11px;color:var(--text2);margin-top:4px;">${b.transaction_ref}</div>` : ''}
+        </td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  function filterBills(status, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadBills(status);
+  }
+
+  function openPay(id, title, amount) {
+    payingBillId = id;
+    document.getElementById('payBillTitle').textContent = title;
+    document.getElementById('payBillAmount').textContent = `₹${amount.toLocaleString()}`;
+    document.getElementById('payRef').value = '';
+    document.getElementById('payModal').classList.add('open');
+  }
+
+  function closePayModal() { document.getElementById('payModal').classList.remove('open'); }
+
+  async function confirmPayment() {
+    try {
+      await api.put(`/bills/${payingBillId}/pay`, {
+        payment_method: document.getElementById('payMethod').value,
+        transaction_ref: document.getElementById('payRef').value || undefined,
+      });
+      showToast('Payment successful! 🎉', 'success');
+      closePayModal();
+      loadSummary();
+      loadBills();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function waiveBill(id) {
+    if (!confirm('Waive this bill?')) return;
+    try {
+      await api.put(`/bills/${id}/waive`);
+      showToast('Bill waived', 'info');
+      loadBills();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function loadVillas() {
+    try {
+      const villas = await api.get('/villas/');
+      const sel = document.getElementById('billVilla');
+      sel.innerHTML = '<option value="">Select villa...</option>' + villas.map(v => `<option value="${v.id}">${v.villa_number}</option>`).join('');
+    } catch(e) {}
+  }
+
+  function openCreateModal() {
+    isBulk = false;
+    document.getElementById('createModalTitle').textContent = 'Create Bill for Villa';
+    document.getElementById('villaSelectGroup').style.display = 'block';
+    document.getElementById('createBillBtn').textContent = 'Create Bill';
+    document.getElementById('createModal').classList.add('open');
+  }
+
+  function openBulkModal() {
+    isBulk = true;
+    document.getElementById('createModalTitle').textContent = 'Bulk Bill — All Occupied Villas';
+    document.getElementById('villaSelectGroup').style.display = 'none';
+    document.getElementById('createBillBtn').textContent = 'Send to All Villas';
+    document.getElementById('createModal').classList.add('open');
+  }
+
+  function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+  async function submitBill() {
+    const title = document.getElementById('billTitle').value.trim();
+    const amount = document.getElementById('billAmount').value;
+    const due = document.getElementById('billDue').value;
+    const category = document.getElementById('billCategory').value;
+    if (!title || !amount || !due) { showToast('Fill all required fields', 'error'); return; }
+
+    try {
+      if (isBulk) {
+        const data = await api.post('/bills/bulk', { title, category, amount: parseFloat(amount), due_date: due, description: document.getElementById('billDesc').value });
+        showToast(data.message, 'success');
+      } else {
+        const villa_id = document.getElementById('billVilla').value;
+        if (!villa_id) { showToast('Select a villa', 'error'); return; }
+        await api.post('/bills/', { villa_id: parseInt(villa_id), title, category, amount: parseFloat(amount), due_date: due, description: document.getElementById('billDesc').value });
+        showToast('Bill created!', 'success');
+      }
+      closeCreateModal();
+      loadBills();
+      loadSummary();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  init();
+</script>
+</body>
+</html>

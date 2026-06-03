@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Parking</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .parking-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .slot-box {
+      aspect-ratio: 1;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      padding: 8px;
+      text-align: center;
+      position: relative;
+    }
+    .slot-box:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .slot-box.available { background: rgba(76,175,130,0.08); border-color: rgba(76,175,130,0.3); }
+    .slot-box.occupied  { background: rgba(224,85,85,0.08);  border-color: rgba(224,85,85,0.3); }
+    .slot-box.reserved  { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.3); }
+    .slot-box.maintenance { background: rgba(144,144,168,0.08); border-color: var(--border); }
+    .slot-num { font-weight: 600; font-size: 13px; margin-top: 4px; }
+    .slot-icon { font-size: 20px; }
+    .legend { display:flex; gap:20px; margin-bottom:20px; flex-wrap:wrap; font-size:13px; }
+    .legend-item { display:flex; align-items:center; gap:8px; }
+    .legend-dot { width:12px;height:12px;border-radius:3px; }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;">
+      <div>
+        <h1>Parking Management</h1>
+        <p>View and manage parking slots</p>
+      </div>
+      <div id="adminActions" style="display:none;gap:10px;">
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Slot</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Summary -->
+      <div class="stat-grid" style="margin-bottom:28px;">
+        <div class="stat-card"><div class="label">Total Slots</div><div class="value" id="totalSlots">—</div></div>
+        <div class="stat-card"><div class="label">Available</div><div class="value" style="color:var(--success)" id="availSlots">—</div></div>
+        <div class="stat-card"><div class="label">Occupied</div><div class="value" style="color:var(--danger)" id="occSlots">—</div></div>
+        <div class="stat-card"><div class="label">Visitor Free</div><div class="value" id="visitorSlots">—</div></div>
+      </div>
+
+      <!-- My Slots (resident) -->
+      <div id="mySlotSection" style="display:none;margin-bottom:32px;">
+        <h2 style="font-size:20px;margin-bottom:14px;">My Parking Slots</h2>
+        <div id="mySlots"></div>
+      </div>
+
+      <!-- Filter -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-outline filter-btn active" onclick="filterSlots('', this)">All</button>
+          <button class="btn btn-outline filter-btn" onclick="filterSlots('car', this)">🚗 Cars</button>
+          <button class="btn btn-outline filter-btn" onclick="filterSlots('bike', this)">🏍️ Bikes</button>
+          <button class="btn btn-outline filter-btn" onclick="filterSlots('visitor', this)">🅿️ Visitor</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm" id="viewGrid" onclick="setView('grid')" style="background:rgba(201,168,76,0.1);">⊞ Grid</button>
+          <button class="btn btn-outline btn-sm" id="viewList" onclick="setView('list')">☰ List</button>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(76,175,130,0.5)"></div>Available</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(224,85,85,0.5)"></div>Occupied</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(201,168,76,0.5)"></div>Reserved</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(144,144,168,0.3)"></div>Maintenance</div>
+      </div>
+
+      <div id="gridView">
+        <div class="parking-grid" id="parkingGrid"></div>
+      </div>
+      <div id="listView" style="display:none;">
+        <div class="table-wrap" id="parkingTable"></div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Slot Detail / Edit Modal -->
+<div class="modal-overlay" id="slotModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h2 id="slotModalTitle">Slot Details</h2>
+      <button class="modal-close" onclick="closeSlotModal()">✕</button>
+    </div>
+    <div id="slotDetails"></div>
+    <div id="slotAdminEdit" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:20px;">
+      <h3 style="font-size:16px;margin-bottom:16px;">Assign / Update</h3>
+      <div class="form-group">
+        <label>Assign to Villa</label>
+        <select class="form-control" id="editVilla"><option value="">Unassigned</option></select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="form-group">
+          <label>Vehicle Number</label>
+          <input type="text" class="form-control" id="editVehicleNum" placeholder="TN01AB1234"/>
+        </div>
+        <div class="form-group">
+          <label>Vehicle Type</label>
+          <select class="form-control" id="editVehicleType">
+            <option value="">—</option>
+            <option value="car">Car</option>
+            <option value="suv">SUV</option>
+            <option value="bike">Bike</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select class="form-control" id="editStatus">
+          <option value="available">Available</option>
+          <option value="occupied">Occupied</option>
+          <option value="reserved">Reserved</option>
+          <option value="maintenance">Maintenance</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveSlot()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Slot Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <h2>Add Parking Slot</h2>
+      <button class="modal-close" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Slot Number</label>
+      <input type="text" class="form-control" id="newSlotNum" placeholder="e.g. P-101"/>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="form-group">
+        <label>Block</label>
+        <input type="text" class="form-control" id="newBlock" placeholder="A, B..."/>
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select class="form-control" id="newType">
+          <option value="car">Car</option>
+          <option value="bike">Bike</option>
+          <option value="visitor">Visitor</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="addSlot()">Add Slot</button>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+  requireAuth();
+  const user = getCurrentUser();
+  let allSlots = [];
+  let currentSlot = null;
+  let currentView = 'grid';
+  let typeFilter = '';
+
+  const typeIcons = { car:'🚗', bike:'🏍️', visitor:'🅿️' };
+  const statusColors = { available:'available', occupied:'occupied', reserved:'reserved', maintenance:'maintenance' };
+
+  async function init() {
+    await loadSummary();
+    await loadSlots();
+    if (user.role === 'admin') {
+      document.getElementById('adminActions').style.display = 'flex';
+      loadVillas();
+    }
+    if (user.role !== 'admin') {
+      loadMySlots();
+    }
+  }
+
+  async function loadSummary() {
+    try {
+      const s = await api.get('/parking/summary');
+      document.getElementById('totalSlots').textContent = s.total;
+      document.getElementById('availSlots').textContent = s.available;
+      document.getElementById('occSlots').textContent = s.occupied;
+      document.getElementById('visitorSlots').textContent = s.visitor_available;
+    } catch(e) {}
+  }
+
+  async function loadMySlots() {
+    try {
+      const slots = await api.get('/parking/my');
+      if (slots.length) {
+        document.getElementById('mySlotSection').style.display = 'block';
+        document.getElementById('mySlots').innerHTML = slots.map(s => `
+          <div class="card" style="display:inline-flex;align-items:center;gap:16px;margin-right:12px;margin-bottom:12px;">
+            <div style="font-size:28px;">${typeIcons[s.slot_type]||'🚗'}</div>
+            <div>
+              <div style="font-weight:600;font-size:16px;">${s.slot_number}</div>
+              <div style="font-size:13px;color:var(--text2);">${s.vehicle_number||'No vehicle registered'}</div>
+            </div>
+            <span class="badge badge-${s.status==='available'?'success':s.status==='occupied'?'danger':'warning'}">${s.status}</span>
+          </div>`).join('');
+      }
+    } catch(e) {}
+  }
+
+  async function loadSlots() {
+    try {
+      const q = typeFilter ? `?type=${typeFilter}` : '';
+      allSlots = await api.get(`/parking/${q}`);
+      render();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function render() {
+    if (currentView === 'grid') renderGrid();
+    else renderList();
+  }
+
+  function renderGrid() {
+    document.getElementById('gridView').style.display = 'block';
+    document.getElementById('listView').style.display = 'none';
+    const el = document.getElementById('parkingGrid');
+    if (!allSlots.length) { el.innerHTML = `<div class="empty-state"><div class="icon">🚗</div><h3>No slots found</h3></div>`; return; }
+    el.innerHTML = allSlots.map(s => `
+      <div class="slot-box ${s.status}" onclick="openSlot(${s.id})" title="${s.slot_number} — ${s.status}${s.vehicle_number?' — '+s.vehicle_number:''}">
+        <div class="slot-icon">${typeIcons[s.slot_type]||'🚗'}</div>
+        <div class="slot-num">${s.slot_number}</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:2px;">${s.villa_number||''}</div>
+      </div>`).join('');
+  }
+
+  function renderList() {
+    document.getElementById('gridView').style.display = 'none';
+    document.getElementById('listView').style.display = 'block';
+    const el = document.getElementById('parkingTable');
+    if (!allSlots.length) { el.innerHTML = `<div class="empty-state"><div class="icon">🚗</div><h3>No slots</h3></div>`; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>Slot</th><th>Type</th><th>Block</th><th>Villa</th><th>Vehicle</th><th>Status</th>${user.role==='admin'?'<th>Action</th>':''}</tr></thead>
+      <tbody>${allSlots.map(s => `<tr>
+        <td><strong>${s.slot_number}</strong></td>
+        <td>${typeIcons[s.slot_type]||''} ${s.slot_type}</td>
+        <td>${s.block||'—'}</td>
+        <td>${s.villa_number||'—'}</td>
+        <td>${s.vehicle_number||'—'}</td>
+        <td>${badge(s.status)}</td>
+        ${user.role==='admin'?`<td><button class="btn btn-outline btn-sm" onclick="openSlot(${s.id})">Edit</button></td>`:''}
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  function setView(v) {
+    currentView = v;
+    document.getElementById('viewGrid').style.background = v === 'grid' ? 'rgba(201,168,76,0.1)' : '';
+    document.getElementById('viewList').style.background = v === 'list' ? 'rgba(201,168,76,0.1)' : '';
+    render();
+  }
+
+  function filterSlots(type, btn) {
+    typeFilter = type;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadSlots();
+  }
+
+  function openSlot(id) {
+    currentSlot = allSlots.find(s => s.id === id);
+    if (!currentSlot) return;
+    document.getElementById('slotModalTitle').textContent = `Slot ${currentSlot.slot_number}`;
+    document.getElementById('slotDetails').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px;">
+        <div><span style="color:var(--text2);">Type</span><br>${typeIcons[currentSlot.slot_type]||''} ${currentSlot.slot_type}</div>
+        <div><span style="color:var(--text2);">Status</span><br>${badge(currentSlot.status)}</div>
+        <div><span style="color:var(--text2);">Villa</span><br>${currentSlot.villa_number||'Unassigned'}</div>
+        <div><span style="color:var(--text2);">Vehicle</span><br>${currentSlot.vehicle_number||'—'}</div>
+        <div><span style="color:var(--text2);">Block</span><br>${currentSlot.block||'—'}</div>
+        <div><span style="color:var(--text2);">Vehicle Type</span><br>${currentSlot.vehicle_type||'—'}</div>
+      </div>`;
+    const adminEl = document.getElementById('slotAdminEdit');
+    if (user.role === 'admin') {
+      adminEl.style.display = 'block';
+      document.getElementById('editVehicleNum').value = currentSlot.vehicle_number || '';
+      document.getElementById('editVehicleType').value = currentSlot.vehicle_type || '';
+      document.getElementById('editStatus').value = currentSlot.status;
+      const villaSel = document.getElementById('editVilla');
+      villaSel.value = currentSlot.assigned_villa_id || '';
+    } else {
+      adminEl.style.display = 'none';
+    }
+    document.getElementById('slotModal').classList.add('open');
+  }
+
+  function closeSlotModal() { document.getElementById('slotModal').classList.remove('open'); }
+
+  async function saveSlot() {
+    try {
+      const villa_id = document.getElementById('editVilla').value;
+      await api.put(`/parking/${currentSlot.id}/assign`, {
+        villa_id: villa_id ? parseInt(villa_id) : null,
+        vehicle_number: document.getElementById('editVehicleNum').value,
+        vehicle_type: document.getElementById('editVehicleType').value,
+      });
+      await api.put(`/parking/${currentSlot.id}/status`, { status: document.getElementById('editStatus').value });
+      showToast('Slot updated!', 'success');
+      closeSlotModal();
+      loadSlots();
+      loadSummary();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function loadVillas() {
+    try {
+      const villas = await api.get('/villas/');
+      const sel = document.getElementById('editVilla');
+      sel.innerHTML = '<option value="">Unassigned</option>' + villas.map(v => `<option value="${v.id}">${v.villa_number}</option>`).join('');
+    } catch(e) {}
+  }
+
+  function openAddModal() { document.getElementById('addModal').classList.add('open'); }
+  function closeAddModal() { document.getElementById('addModal').classList.remove('open'); }
+
+  async function addSlot() {
+    const num = document.getElementById('newSlotNum').value.trim();
+    if (!num) { showToast('Slot number required', 'error'); return; }
+    try {
+      await api.post('/parking/', { slot_number: num, block: document.getElementById('newBlock').value, slot_type: document.getElementById('newType').value });
+      showToast('Slot added!', 'success');
+      closeAddModal();
+      loadSlots();
+      loadSummary();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  init();
+</script>
+</body>
+</html>

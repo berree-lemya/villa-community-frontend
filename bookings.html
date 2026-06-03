@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Bookings</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+
+    <div class="page-header">
+      <h1>Amenity Booking</h1>
+      <p>Book tennis courts and swimming pool</p>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Amenity Cards -->
+      <h2 style="font-size:20px;margin-bottom:16px;">Available Amenities</h2>
+      <div class="card-grid" id="amenityList" style="margin-bottom:36px;">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+
+      <!-- My Bookings -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:20px;">My Bookings</h2>
+        <select class="form-control" style="width:160px;" onchange="filterBookings(this.value)">
+          <option value="">All Status</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="table-wrap" id="myBookings">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Book Modal -->
+<div class="modal-overlay" id="bookModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Book Amenity</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" class="form-control" id="bookDate" onchange="loadSlots()" />
+    </div>
+
+    <div class="form-group">
+      <label>Start Time</label>
+      <select class="form-control" id="startTime">
+        <option value="">Select start time</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>End Time</label>
+      <select class="form-control" id="endTime">
+        <option value="">Select end time</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Number of Guests</label>
+      <input type="number" class="form-control" id="numGuests" value="1" min="1" max="20"/>
+    </div>
+
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <input type="text" class="form-control" id="bookNotes" placeholder="Any special requirements..."/>
+    </div>
+
+    <div id="slotsInfo" style="margin-bottom:16px;font-size:13px;color:var(--text2);"></div>
+
+    <button class="btn btn-primary" style="width:100%" onclick="submitBooking()">Confirm Booking</button>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+  requireAuth();
+  let amenities = [];
+  let selectedAmenity = null;
+  let allBookings = [];
+
+  // Set min date to today
+  const today = new Date().toISOString().split('T')[0];
+
+  async function init() {
+    await loadAmenities();
+    await loadMyBookings();
+  }
+
+  async function loadAmenities() {
+    try {
+      amenities = await api.get('/bookings/amenities');
+      const el = document.getElementById('amenityList');
+      el.innerHTML = amenities.map(a => `
+        <div class="card" style="cursor:pointer;transition:border-color 0.2s;"
+          onmouseenter="this.style.borderColor='var(--accent)'"
+          onmouseleave="this.style.borderColor=''"
+          onclick="openBookModal(${a.id})">
+          <div style="font-size:28px;margin-bottom:10px;">${a.amenity_type === 'tennis_court' ? '🎾' : a.amenity_type === 'swimming_pool' ? '🏊' : '🏛️'}</div>
+          <h3 style="font-size:17px;margin-bottom:6px;">${a.name}</h3>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">${a.description || ''}</p>
+          <div style="display:flex;gap:16px;font-size:12px;color:var(--text2);">
+            <span>⏰ ${a.open_time} – ${a.close_time}</span>
+            <span>👥 Max ${a.capacity}</span>
+            <span>⌛ ${a.slot_duration_minutes} min slots</span>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:16px;width:100%">Book Now</button>
+        </div>`).join('');
+    } catch(e) {
+      showToast(e.message, 'error');
+    }
+  }
+
+  async function loadMyBookings(status = '') {
+    try {
+      const url = '/bookings/my' + (status ? `?status=${status}` : '');
+      allBookings = await api.get(url);
+      renderBookings(allBookings);
+    } catch(e) {}
+  }
+
+  function renderBookings(bookings) {
+    const el = document.getElementById('myBookings');
+    if (!bookings.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h3>No bookings</h3></div>`;
+      return;
+    }
+    el.innerHTML = `<table>
+      <thead><tr><th>Amenity</th><th>Date</th><th>Time</th><th>Guests</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${bookings.map(b => `
+        <tr>
+          <td>${b.amenity_name}</td>
+          <td>${fmtDate(b.booking_date)}</td>
+          <td>${b.start_time} – ${b.end_time}</td>
+          <td>${b.num_guests}</td>
+          <td>${badge(b.status)}</td>
+          <td>${b.status === 'confirmed' ? `<button class="btn btn-danger btn-sm" onclick="cancelBooking(${b.id})">Cancel</button>` : '—'}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function filterBookings(status) { loadMyBookings(status); }
+
+  function openBookModal(amenityId) {
+    selectedAmenity = amenities.find(a => a.id === amenityId);
+    document.getElementById('modalTitle').textContent = `Book — ${selectedAmenity.name}`;
+    document.getElementById('bookDate').min = today;
+    document.getElementById('bookDate').value = today;
+    document.getElementById('slotsInfo').textContent = '';
+    populateTimes(selectedAmenity);
+    loadSlots();
+    document.getElementById('bookModal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('bookModal').classList.remove('open');
+  }
+
+  function populateTimes(amenity) {
+    const times = [];
+    const [openH, openM] = amenity.open_time.split(':').map(Number);
+    const [closeH, closeM] = amenity.close_time.split(':').map(Number);
+    for (let h = openH; h <= closeH; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        if (h === closeH && m >= closeM) break;
+        times.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+      }
+    }
+    const startSel = document.getElementById('startTime');
+    const endSel = document.getElementById('endTime');
+    startSel.innerHTML = '<option value="">Select start time</option>' + times.map(t => `<option value="${t}">${t}</option>`).join('');
+    endSel.innerHTML = '<option value="">Select end time</option>' + times.map(t => `<option value="${t}">${t}</option>`).join('');
+    startSel.onchange = () => {
+      const idx = times.indexOf(startSel.value);
+      const minEnd = times[idx + (amenity.slot_duration_minutes / 30)] || '';
+      endSel.value = minEnd;
+    };
+  }
+
+  async function loadSlots() {
+    const date = document.getElementById('bookDate').value;
+    if (!date || !selectedAmenity) return;
+    try {
+      const data = await api.get(`/bookings/amenities/${selectedAmenity.id}/availability?date=${date}`);
+      const booked = data.booked_slots;
+      if (booked.length === 0) {
+        document.getElementById('slotsInfo').textContent = '✅ All slots available for this date';
+      } else {
+        document.getElementById('slotsInfo').innerHTML = `⚠️ Booked slots: ${booked.map(s => `${s.start}–${s.end}`).join(', ')}`;
+      }
+    } catch(e) {}
+  }
+
+  async function submitBooking() {
+    const date = document.getElementById('bookDate').value;
+    const start = document.getElementById('startTime').value;
+    const end = document.getElementById('endTime').value;
+    const guests = document.getElementById('numGuests').value;
+    const notes = document.getElementById('bookNotes').value;
+
+    if (!date || !start || !end) { showToast('Please fill all fields', 'error'); return; }
+    if (start >= end) { showToast('End time must be after start time', 'error'); return; }
+
+    try {
+      await api.post('/bookings/', {
+        amenity_id: selectedAmenity.id,
+        booking_date: date, start_time: start, end_time: end,
+        num_guests: parseInt(guests), notes,
+      });
+      showToast('Booking confirmed!', 'success');
+      closeModal();
+      loadMyBookings();
+    } catch(e) {
+      showToast(e.message, 'error');
+    }
+  }
+
+  async function cancelBooking(id) {
+    if (!confirm('Cancel this booking?')) return;
+    try {
+      await api.put(`/bookings/${id}/cancel`, { reason: 'Cancelled by user' });
+      showToast('Booking cancelled', 'info');
+      loadMyBookings();
+    } catch(e) {
+      showToast(e.message, 'error');
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>

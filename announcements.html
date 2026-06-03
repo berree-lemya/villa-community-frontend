@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Announcements</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .ann-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .ann-card:hover { border-color: rgba(201,168,76,0.3); }
+    .ann-card.pinned { border-color: rgba(201,168,76,0.4); }
+    .ann-card.pinned::before {
+      content: '📌 Pinned';
+      position: absolute;
+      top: 12px; right: 16px;
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+    .ann-card.urgent { border-left: 3px solid var(--danger); }
+    .ann-card.important { border-left: 3px solid var(--accent); }
+    .ann-meta { display:flex; gap:12px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    .ann-title { font-family:'Cormorant Garamond',serif; font-size:20px; margin-bottom:10px; }
+    .ann-body { color: var(--text2); font-size:14px; line-height:1.7; white-space: pre-wrap; }
+    .ann-footer { margin-top:14px; display:flex; gap:16px; font-size:12px; color:var(--text2); }
+    .cat-pill {
+      display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px;
+      background:rgba(255,255,255,0.06); border:1px solid var(--border);
+      text-transform:capitalize; letter-spacing:0.05em;
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;">
+      <div>
+        <h1>Announcements</h1>
+        <p>Community news, events and notices</p>
+      </div>
+      <div id="postBtn" style="display:none;">
+        <button class="btn btn-primary" onclick="openModal()">+ Post Announcement</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Category filter -->
+      <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;">
+        <button class="btn btn-outline filter-btn active" onclick="filter('', this)">All</button>
+        <button class="btn btn-outline filter-btn" onclick="filter('general', this)">📋 General</button>
+        <button class="btn btn-outline filter-btn" onclick="filter('maintenance', this)">🔧 Maintenance</button>
+        <button class="btn btn-outline filter-btn" onclick="filter('event', this)">🎉 Events</button>
+        <button class="btn btn-outline filter-btn" onclick="filter('safety', this)">⚠️ Safety</button>
+      </div>
+
+      <!-- Pinned -->
+      <div id="pinnedSection" style="display:none;margin-bottom:28px;">
+        <h3 style="font-size:14px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text2);margin-bottom:14px;">📌 Pinned</h3>
+        <div id="pinnedList"></div>
+      </div>
+
+      <!-- All Announcements -->
+      <div id="annList"><div class="loader"><div class="spinner"></div></div></div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Post Modal -->
+<div class="modal-overlay" id="annModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Post Announcement</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" class="form-control" id="annTitle" placeholder="Announcement title..."/>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="form-group">
+        <label>Category</label>
+        <select class="form-control" id="annCat">
+          <option value="general">General</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="event">Event</option>
+          <option value="safety">Safety</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Priority</label>
+        <select class="form-control" id="annPriority">
+          <option value="normal">Normal</option>
+          <option value="important">Important</option>
+          <option value="urgent">🚨 Urgent</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Message</label>
+      <textarea class="form-control" id="annBody" rows="5" placeholder="Write your announcement..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Expires On (optional)</label>
+      <input type="datetime-local" class="form-control" id="annExpiry"/>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px;">
+        <input type="checkbox" id="annPinned"/> 📌 Pin this announcement to top
+      </label>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitAnn()">Post Announcement</button>
+  </div>
+</div>
+
+<!-- Read More Modal -->
+<div class="modal-overlay" id="readModal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <h2 id="readTitle">—</h2>
+      <button class="modal-close" onclick="document.getElementById('readModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="ann-meta" id="readMeta"></div>
+    <div class="ann-body" id="readBody" style="color:var(--text);font-size:15px;"></div>
+    <div class="ann-footer" id="readFooter"></div>
+    <div id="readAdminActions" style="margin-top:20px;gap:10px;display:none;"></div>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+  requireAuth();
+  const user = getCurrentUser();
+  let allAnns = [];
+  let currentFilter = '';
+  let currentAnn = null;
+
+  const catIcons = { general:'📋', maintenance:'🔧', event:'🎉', safety:'⚠️' };
+  const priColors = { urgent:'var(--danger)', important:'var(--accent)', normal:'var(--text2)' };
+
+  if (user.role === 'admin') {
+    document.getElementById('postBtn').style.display = 'block';
+  }
+
+  async function load() {
+    try {
+      const data = await api.get('/announcements/');
+      // Pinned
+      if (data.pinned.length) {
+        document.getElementById('pinnedSection').style.display = 'block';
+        document.getElementById('pinnedList').innerHTML = data.pinned.map(renderCard).join('');
+      }
+      allAnns = data.announcements;
+      renderList(allAnns);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function renderCard(a) {
+    return `<div class="ann-card ${a.pinned?'pinned':''} ${a.priority}" onclick="openRead(${a.id})">
+      <div class="ann-meta">
+        <span class="cat-pill">${catIcons[a.category]||'📋'} ${a.category}</span>
+        ${a.priority !== 'normal' ? `<span style="font-size:12px;color:${priColors[a.priority]};font-weight:500;">${a.priority.toUpperCase()}</span>` : ''}
+      </div>
+      <div class="ann-title">${a.title}</div>
+      <div class="ann-body">${a.body.length > 180 ? a.body.slice(0,180) + '...' : a.body}</div>
+      <div class="ann-footer">
+        <span>👤 ${a.author_name}</span>
+        <span>🕐 ${fmtDate(a.created_at)}</span>
+        ${a.expires_at ? `<span>⏳ Expires ${fmtDate(a.expires_at)}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function renderList(list) {
+    const filtered = currentFilter ? list.filter(a => a.category === currentFilter) : list;
+    const el = document.getElementById('annList');
+    if (!filtered.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">📢</div><h3>No announcements</h3></div>`;
+      return;
+    }
+    el.innerHTML = filtered.map(renderCard).join('');
+  }
+
+  function filter(cat, btn) {
+    currentFilter = cat;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderList(allAnns);
+  }
+
+  function openRead(id) {
+    api.get(`/announcements/${id}`).then(a => {
+      currentAnn = a;
+      document.getElementById('readTitle').textContent = a.title;
+      document.getElementById('readMeta').innerHTML = `
+        <span class="cat-pill">${catIcons[a.category]||'📋'} ${a.category}</span>
+        ${a.priority !== 'normal' ? `<span style="color:${priColors[a.priority]};font-size:13px;font-weight:500;">${a.priority.toUpperCase()}</span>` : ''}
+      `;
+      document.getElementById('readBody').textContent = a.body;
+      document.getElementById('readFooter').innerHTML = `<span>👤 ${a.author_name}</span><span>🕐 ${fmtDate(a.created_at)}</span>${a.expires_at?`<span>⏳ Expires ${fmtDate(a.expires_at)}</span>`:''}`;
+
+      const adminEl = document.getElementById('readAdminActions');
+      if (user.role === 'admin') {
+        adminEl.style.display = 'flex';
+        adminEl.innerHTML = `
+          <button class="btn btn-outline btn-sm" onclick="togglePin(${a.id},${!a.pinned})">${a.pinned?'Unpin':'📌 Pin'}</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteAnn(${a.id})">Delete</button>
+        `;
+      }
+      document.getElementById('readModal').classList.add('open');
+    });
+  }
+
+  function openModal() { document.getElementById('annModal').classList.add('open'); }
+  function closeModal() { document.getElementById('annModal').classList.remove('open'); }
+
+  async function submitAnn() {
+    const title = document.getElementById('annTitle').value.trim();
+    const body = document.getElementById('annBody').value.trim();
+    if (!title || !body) { showToast('Title and message are required', 'error'); return; }
+    try {
+      await api.post('/announcements/', {
+        title, body,
+        category: document.getElementById('annCat').value,
+        priority: document.getElementById('annPriority').value,
+        pinned: document.getElementById('annPinned').checked,
+        expires_at: document.getElementById('annExpiry').value || undefined,
+      });
+      showToast('Announcement posted!', 'success');
+      closeModal();
+      load();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function togglePin(id, pin) {
+    try {
+      await api.put(`/announcements/${id}`, { pinned: pin });
+      showToast(pin ? 'Pinned!' : 'Unpinned', 'info');
+      document.getElementById('readModal').classList.remove('open');
+      load();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function deleteAnn(id) {
+    if (!confirm('Remove this announcement?')) return;
+    try {
+      await api.delete(`/announcements/${id}`);
+      showToast('Announcement removed', 'info');
+      document.getElementById('readModal').classList.remove('open');
+      load();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  load();
+</script>
+</body>
+</html>

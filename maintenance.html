@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vineyards — Maintenance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+
+    <div class="page-header" style="display:flex;align-items:flex-end;justify-content:space-between;">
+      <div>
+        <h1>Maintenance</h1>
+        <p>Request electrician, plumber or carpenter service</p>
+      </div>
+      <button class="btn btn-primary" onclick="openModal()">+ New Request</button>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Category quick filters -->
+      <div style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;">
+        <button class="btn btn-outline filter-btn active" onclick="filterReqs('', this)">All</button>
+        <button class="btn btn-outline filter-btn" onclick="filterReqs('electrician', this)">⚡ Electrician</button>
+        <button class="btn btn-outline filter-btn" onclick="filterReqs('plumber', this)">🔵 Plumber</button>
+        <button class="btn btn-outline filter-btn" onclick="filterReqs('carpenter', this)">🪵 Carpenter</button>
+      </div>
+
+      <div class="table-wrap" id="reqList">
+        <div class="loader"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- New Request Modal -->
+<div class="modal-overlay" id="reqModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>New Maintenance Request</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label>Service Type</label>
+      <select class="form-control" id="reqCategory">
+        <option value="">Select type</option>
+        <option value="electrician">⚡ Electrician</option>
+        <option value="plumber">🔵 Plumber</option>
+        <option value="carpenter">🪵 Carpenter</option>
+        <option value="other">🔨 Other</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" class="form-control" id="reqTitle" placeholder="e.g. Leaking tap in kitchen"/>
+    </div>
+
+    <div class="form-group">
+      <label>Description</label>
+      <textarea class="form-control" id="reqDesc" rows="3" placeholder="Describe the issue in detail..."></textarea>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="form-group">
+        <label>Priority</label>
+        <select class="form-control" id="reqPriority">
+          <option value="low">Low</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">🚨 Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Preferred Date</label>
+        <input type="date" class="form-control" id="reqDate"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Preferred Time</label>
+      <select class="form-control" id="reqTimeSlot">
+        <option value="">Any time</option>
+        <option value="morning">Morning (8am–12pm)</option>
+        <option value="afternoon">Afternoon (12pm–5pm)</option>
+        <option value="evening">Evening (5pm–8pm)</option>
+      </select>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" onclick="submitRequest()">Submit Request</button>
+  </div>
+</div>
+
+<!-- Rate Modal -->
+<div class="modal-overlay" id="rateModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header">
+      <h2>Rate Service</h2>
+      <button class="modal-close" onclick="closeRateModal()">✕</button>
+    </div>
+    <p style="color:var(--text2);margin-bottom:20px;">How was the service?</p>
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:20px;" id="stars">
+      <span style="font-size:32px;cursor:pointer;" onclick="setRating(1)" id="star1">☆</span>
+      <span style="font-size:32px;cursor:pointer;" onclick="setRating(2)" id="star2">☆</span>
+      <span style="font-size:32px;cursor:pointer;" onclick="setRating(3)" id="star3">☆</span>
+      <span style="font-size:32px;cursor:pointer;" onclick="setRating(4)" id="star4">☆</span>
+      <span style="font-size:32px;cursor:pointer;" onclick="setRating(5)" id="star5">☆</span>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="submitRating()">Submit Rating</button>
+  </div>
+</div>
+
+<div class="toast-container"></div>
+<script src="api.js"></script>
+<script src="sidebar.js"></script>
+<script>
+  requireAuth();
+  let allRequests = [];
+  let currentFilter = '';
+  let ratingReqId = null;
+  let selectedRating = 0;
+
+  async function loadRequests() {
+    try {
+      const user = getCurrentUser();
+      const url = user.role === 'admin' ? '/maintenance/all' : '/maintenance/my';
+      allRequests = await api.get(url);
+      renderRequests(allRequests);
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function renderRequests(list) {
+    const el = document.getElementById('reqList');
+    const filtered = currentFilter ? list.filter(r => r.category === currentFilter) : list;
+    if (!filtered.length) {
+      el.innerHTML = `<div class="empty-state"><div class="icon">🔧</div><h3>No requests</h3><p>Submit your first maintenance request</p></div>`;
+      return;
+    }
+    const catIcons = { electrician:'⚡', plumber:'🔵', carpenter:'🪵', other:'🔨' };
+    el.innerHTML = `<table>
+      <thead><tr><th>Type</th><th>Title</th><th>Priority</th><th>Status</th><th>Assigned To</th><th>Date</th><th>Action</th></tr></thead>
+      <tbody>${filtered.map(r => `
+        <tr>
+          <td>${catIcons[r.category] || ''} ${r.category}</td>
+          <td><strong>${r.title}</strong><br><span style="color:var(--text2);font-size:12px;">${r.description.slice(0,60)}...</span></td>
+          <td><span class="badge badge-${r.priority === 'urgent' ? 'danger' : r.priority === 'high' ? 'warning' : 'grey'}">${r.priority}</span></td>
+          <td>${badge(r.status)}</td>
+          <td>${r.assigned_to || '—'}</td>
+          <td>${fmtDate(r.created_at)}</td>
+          <td>
+            ${r.status === 'open' ? `<button class="btn btn-danger btn-sm" onclick="cancelReq(${r.id})">Cancel</button>` : ''}
+            ${r.status === 'resolved' && !r.rating ? `<button class="btn btn-outline btn-sm" onclick="openRate(${r.id})">⭐ Rate</button>` : ''}
+            ${r.rating ? `<span style="color:var(--accent)">${'★'.repeat(r.rating)}</span>` : ''}
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  function filterReqs(cat, btn) {
+    currentFilter = cat;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderRequests(allRequests);
+  }
+
+  function openModal() { document.getElementById('reqModal').classList.add('open'); }
+  function closeModal() { document.getElementById('reqModal').classList.remove('open'); }
+
+  async function submitRequest() {
+    const cat = document.getElementById('reqCategory').value;
+    const title = document.getElementById('reqTitle').value.trim();
+    const desc = document.getElementById('reqDesc').value.trim();
+    const priority = document.getElementById('reqPriority').value;
+    const date = document.getElementById('reqDate').value;
+    const slot = document.getElementById('reqTimeSlot').value;
+
+    if (!cat || !title || !desc) { showToast('Please fill all required fields', 'error'); return; }
+
+    try {
+      await api.post('/maintenance/', { category: cat, title, description: desc, priority, preferred_date: date || undefined, preferred_time_slot: slot || undefined });
+      showToast('Request submitted!', 'success');
+      closeModal();
+      loadRequests();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function cancelReq(id) {
+    if (!confirm('Cancel this request?')) return;
+    try {
+      await api.put(`/maintenance/${id}/cancel`);
+      showToast('Request cancelled', 'info');
+      loadRequests();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  function openRate(id) {
+    ratingReqId = id;
+    selectedRating = 0;
+    [1,2,3,4,5].forEach(n => document.getElementById(`star${n}`).textContent = '☆');
+    document.getElementById('rateModal').classList.add('open');
+  }
+
+  function closeRateModal() { document.getElementById('rateModal').classList.remove('open'); }
+
+  function setRating(n) {
+    selectedRating = n;
+    [1,2,3,4,5].forEach(i => document.getElementById(`star${i}`).textContent = i <= n ? '★' : '☆');
+  }
+
+  async function submitRating() {
+    if (!selectedRating) { showToast('Please select a rating', 'error'); return; }
+    try {
+      await api.put(`/maintenance/${ratingReqId}/rate`, { rating: selectedRating });
+      showToast('Thank you for your feedback!', 'success');
+      closeRateModal();
+      loadRequests();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  loadRequests();
+</script>
+</body>
+</html>
